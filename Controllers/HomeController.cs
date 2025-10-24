@@ -1,6 +1,6 @@
-using DocumentFormat.OpenXml.Packaging;
-using DocumentFormat.OpenXml.Spreadsheet;
+using ExcelDataReader;
 using Microsoft.AspNetCore.Mvc;
+using System.Data;
 using webContratoQR.Models;
 
 namespace webContratoQR.Controllers
@@ -26,9 +26,6 @@ namespace webContratoQR.Controllers
         public Task<IActionResult> Index(string texto)
         {
             List<FileExcel> funcionarios = new List<FileExcel>();
-            string RutFuncionario = "";
-            string NombreFuncionario = "";
-            string UrlContrato = "";
             string? filePath = ""; // _configuration.GetValue<string>("NombreExcel").ToString();
             FileExcelModel fileExcelModel = new FileExcelModel();
 
@@ -51,59 +48,24 @@ namespace webContratoQR.Controllers
 
             ViewData["qr"] = "";
 
-
-            // 1. Abre el documento de Excel en modo de solo lectura
-            using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(filePath, false))
+            using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
             {
-                //create the object for workbook part  
-                WorkbookPart workbookPart = spreadsheetDocument.WorkbookPart;
-                Sheets thesheetcollection = workbookPart.Workbook.GetFirstChild<Sheets>();
-
-                //using for each loop to get the sheet from the sheetcollection  
-                foreach (Sheet thesheet in thesheetcollection)
+                using (var reader = ExcelReaderFactory.CreateReader(stream))
                 {
-                    //statement to get the worksheet object by using the sheet id  
-                    Worksheet theWorksheet = ((WorksheetPart)workbookPart.GetPartById(thesheet.Id)).Worksheet;
+                    var result = reader.AsDataSet();
 
-                    SheetData thesheetdata = theWorksheet.GetFirstChild<SheetData>();
-                    foreach (Row thecurrentrow in thesheetdata)
+                    foreach(DataRow fila in result.Tables[0].Rows)
                     {
-                        foreach (Cell thecurrentcell in thecurrentrow)
+                        if (!fila[0].ToString().Equals("RUT", StringComparison.CurrentCultureIgnoreCase) && fila[1].ToString().ToUpper() != "NOMBRE" && fila[2].ToString().ToUpper() != "ENLACE")
                         {
-                            if (thecurrentcell.CellReference != "A1" && thecurrentcell.CellReference != "B1" && thecurrentcell.CellReference != "C1")
-                            {
-                                //statement to take the integer value  
-                                string currentcellvalue = string.Empty;
-                                if (thecurrentcell.DataType != null)
-                                {
-                                    if (thecurrentcell.DataType == CellValues.SharedString)
-                                    {
-                                        int id;
-
-                                        if (Int32.TryParse(thecurrentcell.InnerText, out id))
-                                        {
-                                            SharedStringItem item = workbookPart.SharedStringTablePart.SharedStringTable.Elements<SharedStringItem>().ElementAt(id);
-                                            if (item.Text != null && thecurrentcell.CellReference.ToString().Substring(0, 1) == "A")
-                                            {
-                                                RutFuncionario = item.Text.Text.Replace("-", "");
-                                            }
-                                            else if (item.Text != null && thecurrentcell.CellReference.ToString().Substring(0, 1) == "B")
-                                            {
-                                                NombreFuncionario = item.Text.Text;
-                                            }
-                                            else if (item.Text != null && thecurrentcell.CellReference.ToString().Substring(0, 1) == "C")
-                                            {
-                                                UrlContrato = item.Text.Text;
-                                            }
-
-                                        }
-                                    }
-                                }
-                            }
-
+                            funcionarios.Add(
+                                new FileExcel 
+                                { 
+                                    RutFuncionario = fila[0].ToString(), 
+                                    NombreFuncionario = fila[1].ToString(), 
+                                    UrlContrato = fila[2].ToString() 
+                                });
                         }
-
-                        funcionarios.Add(new FileExcel { RutFuncionario = RutFuncionario, NombreFuncionario = NombreFuncionario, UrlContrato = UrlContrato });
                     }
                 }
             }
